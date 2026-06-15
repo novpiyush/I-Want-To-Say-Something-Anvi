@@ -316,6 +316,15 @@
     <!-- Black Shutter for seamless Black Fade-In transition -->
     <div id="black-shutter"></div>
 
+    <!-- Loading Screen -->
+    <div id="loading-screen" style="display:none; position:fixed; inset:0; z-index:9000; background:#000; flex-direction:column; align-items:center; justify-content:center; gap:28px;">
+        <div style="font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif; color:#fff; font-size:15px; font-weight:500; letter-spacing:0.12em; opacity:1;" id="load-label">GATHERING COURAGE</div>
+        <div style="width:260px; height:3px; background:rgba(255,255,255,0.1); border-radius:10px; overflow:hidden;">
+            <div id="load-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#ff4488,#fff,#ffdf00); border-radius:10px; transition:width 0.35s cubic-bezier(0.4,0,0.2,1);"></div>
+        </div>
+        <div style="font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif; color:#fff; font-size:38px; font-weight:700; letter-spacing:0.05em;" id="load-pct">0%</div>
+    </div>
+
     <div id="webcam-container"><video id="webcam" autoplay playsinline muted></video></div>
     <div id="canvas-container"></div>
 
@@ -728,25 +737,85 @@ function playTransitionSound(state) {
 }
 
 // Black Fade-In/Out Transition on click
-btnEnter.addEventListener('click', () => {
+// ─── LOADING PROGRESS SYSTEM ──────────────────────────────────────────────────
+let _loadProgress = 0;
+let _loadDone = false;
+
+function setLoadProgress(pct, label) {
+    _loadProgress = Math.min(pct, 100);
+    const bar = document.getElementById('load-bar');
+    const num = document.getElementById('load-pct');
+    const lbl = document.getElementById('load-label');
+    if (bar) bar.style.width = _loadProgress + '%';
+    if (num) num.textContent = Math.round(_loadProgress) + '%';
+    if (lbl && label) lbl.textContent = label;
+    if (_loadProgress >= 100 && !_loadDone) {
+        _loadDone = true;
+        setTimeout(() => proceedToMain(), 800); // small pause at 100% before entering
+    }
+}
+
+function proceedToMain() {
     playEnterSound();
     startBgMusic();
-    if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-    else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen();
-    
+    const loadScreen = document.getElementById('loading-screen');
     const shutter = document.getElementById('black-shutter');
-    // 1. Fade the black shutter in to completely cover the screen
+    // Hide loading screen, fade to black shutter, then reveal main
+    loadScreen.style.display = 'none';
     shutter.style.opacity = '1';
-    
     setTimeout(() => {
-        // 2. Hide the intro overlay behind the black shutter curtain
         enterOverlay.style.display = 'none';
-        
-        // 3. Smoothly fade the black shutter out to let the ThreeJS canvas fade in cleanly
         setTimeout(() => {
             shutter.style.opacity = '0';
         }, 100);
-    }, 600); // Wait for shutter animation duration (0.6s)
+    }, 600);
+}
+
+btnEnter.addEventListener('click', () => {
+    if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+    else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen();
+
+    // Hide enter overlay, show loading screen
+    enterOverlay.style.display = 'none';
+    const loadScreen = document.getElementById('loading-screen');
+    loadScreen.style.display = 'flex';
+    setLoadProgress(0, 'GATHERING COURAGE');
+
+    // Stage 1: Three.js already inited on page load — count it as 20%
+    setTimeout(() => setLoadProgress(20, 'PICKING THE RIGHT WORDS'), 200);
+
+    // Stage 2: Trigger MediaPipe + Camera load (if not started)
+    setTimeout(() => {
+        setLoadProgress(35, 'HEART IS BEATING FAST');
+        if (!window.sensorStarted) startSensor();
+    }, 600);
+
+    // Stage 3: Wait for MediaPipe model to finish loading (it fires onResults when ready)
+    // We poll for webcamActive which becomes true after camera.start() resolves
+    let stage3done = false;
+    const pollCamera = setInterval(() => {
+        if (webcamActive && !stage3done) {
+            stage3done = true;
+            clearInterval(pollCamera);
+            setLoadProgress(70, 'ALMOST THERE, ANVI');
+            setTimeout(() => setLoadProgress(85, 'PREPARING SOMETHING SPECIAL'), 400);
+        }
+    }, 250);
+
+    // Stage 4: Wait for first actual hand detection frame to confirm pipeline is fully ready
+    let stage4done = false;
+    const pollFrame = setInterval(() => {
+        if (window._firstFrameProcessed && !stage4done) {
+            stage4done = true;
+            clearInterval(pollFrame);
+            setLoadProgress(100, 'Ready');
+        }
+    }, 200);
+
+    // Safety fallback: if 18 seconds pass and still not 100%, force complete
+    setTimeout(() => {
+        if (!_loadDone) setLoadProgress(100, 'Ready');
+    }, 18000);
 });
 
 // ─── THREE.JS INIT ────────────────────────────────────────────────────────────
@@ -1220,6 +1289,9 @@ const SMOOTHING_FRAMES = 7;
 const CONFIRM_THRESHOLD = 5;
 
 function onHandResults(results) {
+    // Mark that the full pipeline is ready (first frame processed)
+    if (!window._firstFrameProcessed) window._firstFrameProcessed = true;
+
     let detected = 0;
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const raw = results.multiHandLandmarks[0];
