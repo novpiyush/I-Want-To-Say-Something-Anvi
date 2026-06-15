@@ -508,13 +508,26 @@ function startBgMusic() {
     _bgAudioEl.currentTime = 0;
     const p = _bgAudioEl.play();
     if (p) p.catch(() => {});
+
+    // Boost song volume 5x via Web Audio GainNode
+    try {
+        const ctx = getAudioCtx();
+        if (!window._bgBoostDone) {
+            window._bgBoostDone = true;
+            const src = ctx.createMediaElementSource(_bgAudioEl);
+            const boost = ctx.createGain();
+            boost.gain.value = 5.0;
+            src.connect(boost);
+            boost.connect(ctx.destination);
+        }
+    } catch(e) {}
 }
 
 function playEnterSound() {
     const ctx = getAudioCtx();
     const master = ctx.createGain();
     master.gain.setValueAtTime(0, ctx.currentTime);
-    master.gain.linearRampToValueAtTime(0.38, ctx.currentTime + 0.04);
+    master.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.04);
     master.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.8);
     master.connect(ctx.destination);
 
@@ -541,7 +554,7 @@ function playEnterSound() {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, t);
         osc.frequency.linearRampToValueAtTime(freq * 1.5, t + 0.9);
-        g.gain.setValueAtTime(0.55, t);
+        g.gain.setValueAtTime(0.18, t);
         g.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
         osc.connect(filter); filter.connect(g); g.connect(master);
         osc.start(t); osc.stop(t + 1.4);
@@ -558,7 +571,7 @@ function playEnterSound() {
     noiseFilter.type = 'highpass';
     noiseFilter.frequency.value = 4000;
     const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.28, ctx.currentTime);
+    noiseGain.gain.setValueAtTime(0.09, ctx.currentTime);
     noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
     noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(master);
     noise.start(ctx.currentTime);
@@ -572,7 +585,7 @@ function playEnterSound() {
     pad.type = 'triangle';
     pad.frequency.value = 523;
     padGain.gain.setValueAtTime(0, ctx.currentTime + 0.1);
-    padGain.gain.linearRampToValueAtTime(0.45, ctx.currentTime + 0.5);
+    padGain.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 0.5);
     padGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.8);
     pad.connect(padFilter); padFilter.connect(padGain); padGain.connect(master);
     pad.start(ctx.currentTime + 0.1); pad.stop(ctx.currentTime + 2.8);
@@ -646,53 +659,53 @@ function playTransitionSound(state) {
 
     if (state === 0) {
         // ── Back to sphere: deep cosmic dissolve ──
-        whoosh(220, 60, 0.18, 0.7, now);
-        bell(130, 0.22, 2.2, now + 0.05);
-        bell(195, 0.14, 1.8, now + 0.12);
-        sparkle(1800, 0.18, now);
-        sparkle(2400, 0.13, now + 0.08);
+        whoosh(220, 60, 0.06, 0.7, now);
+        bell(130, 0.07, 2.2, now + 0.05);
+        bell(195, 0.04, 1.8, now + 0.12);
+        sparkle(1800, 0.06, now);
+        sparkle(2400, 0.04, now + 0.08);
 
     } else if (state === 1) {
         // ── ONE: single pure crystalline ping ──
-        bell(523, 0.28, 2.0, now);
-        sparkle(4200, 0.22, now);
-        sparkle(3100, 0.14, now + 0.06);
-        whoosh(180, 90, 0.10, 0.35, now);
+        bell(523, 0.09, 2.0, now);
+        sparkle(4200, 0.07, now);
+        sparkle(3100, 0.04, now + 0.06);
+        whoosh(180, 90, 0.03, 0.35, now);
 
     } else if (state === 2) {
         // ── TWO: double chime, ascending ──
-        bell(659, 0.24, 1.6, now);
-        bell(784, 0.20, 1.4, now + 0.12);
-        sparkle(5200, 0.18, now + 0.05);
-        sparkle(4400, 0.15, now + 0.18);
-        whoosh(200, 110, 0.10, 0.4, now);
+        bell(659, 0.08, 1.6, now);
+        bell(784, 0.06, 1.4, now + 0.12);
+        sparkle(5200, 0.06, now + 0.05);
+        sparkle(4400, 0.05, now + 0.18);
+        whoosh(200, 110, 0.03, 0.4, now);
 
     } else if (state === 3) {
         // ── THREE: triple fairy arpeggio ──
-        bell(523, 0.22, 1.4, now);
-        bell(659, 0.22, 1.3, now + 0.09);
-        bell(784, 0.22, 1.2, now + 0.18);
-        sparkle(6000, 0.20, now + 0.05);
-        sparkle(5200, 0.16, now + 0.14);
-        sparkle(4400, 0.13, now + 0.22);
-        whoosh(240, 130, 0.12, 0.45, now);
+        bell(523, 0.07, 1.4, now);
+        bell(659, 0.07, 1.3, now + 0.09);
+        bell(784, 0.07, 1.2, now + 0.18);
+        sparkle(6000, 0.06, now + 0.05);
+        sparkle(5200, 0.05, now + 0.14);
+        sparkle(4400, 0.04, now + 0.22);
+        whoosh(240, 130, 0.04, 0.45, now);
 
     } else if (state === 4) {
         // ── FOUR: cosmic chord + shimmer cascade ──
-        bell(523, 0.20, 1.5, now);
-        bell(659, 0.18, 1.4, now + 0.07);
-        bell(784, 0.18, 1.3, now + 0.14);
-        bell(1047, 0.16, 1.2, now + 0.21);
-        [5800, 4900, 4100, 3400].forEach((f, i) => sparkle(f, 0.18, now + i * 0.07));
-        whoosh(280, 150, 0.13, 0.5, now);
+        bell(523, 0.06, 1.5, now);
+        bell(659, 0.06, 1.4, now + 0.07);
+        bell(784, 0.06, 1.3, now + 0.14);
+        bell(1047, 0.05, 1.2, now + 0.21);
+        [5800, 4900, 4100, 3400].forEach((f, i) => sparkle(f, 0.06, now + i * 0.07));
+        whoosh(280, 150, 0.04, 0.5, now);
 
     } else if (state === 5) {
         // ── FIVE "I Love You": magical climax — rising glissando + stardust rain ──
-        [523, 659, 784, 988, 1175].forEach((f, i) => bell(f, 0.22, 1.8 - i*0.15, now + i*0.08));
-        [6500, 5800, 5100, 4400, 3700].forEach((f, i) => sparkle(f, 0.20, now + i * 0.06));
+        [523, 659, 784, 988, 1175].forEach((f, i) => bell(f, 0.07, 1.8 - i*0.15, now + i*0.08));
+        [6500, 5800, 5100, 4400, 3700].forEach((f, i) => sparkle(f, 0.06, now + i * 0.06));
         // Extra magic shimmer tail
-        [6800, 7200, 7800].forEach((f, i) => sparkle(f, 0.14, now + 0.4 + i * 0.07));
-        whoosh(320, 180, 0.16, 0.6, now);
+        [6800, 7200, 7800].forEach((f, i) => sparkle(f, 0.04, now + 0.4 + i * 0.07));
+        whoosh(320, 180, 0.05, 0.6, now);
         // Dreamy pad swell
         const pad = ctx.createOscillator();
         const padG = ctx.createGain();
@@ -700,7 +713,7 @@ function playTransitionSound(state) {
         padF.type = 'lowpass'; padF.frequency.value = 800;
         pad.type = 'triangle'; pad.frequency.value = 392;
         padG.gain.setValueAtTime(0, now + 0.2);
-        padG.gain.linearRampToValueAtTime(0.18, now + 0.6);
+        padG.gain.linearRampToValueAtTime(0.06, now + 0.6);
         padG.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
         pad.connect(padF); padF.connect(padG); padG.connect(ctx.destination);
         pad.start(now + 0.2); pad.stop(now + 2.4);
