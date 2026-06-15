@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+    <title>FingerVision AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        /* Strict CSS Resets from Birthday_final.html */
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+        html,body{
+            width:100%;height:100%;
+            overflow:hidden; background:#000000;
+            touch-action:none;
+            -webkit-user-select:none;
+            user-select:none;
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+            text-rendering:optimizeLegibility;
+        }
+
+        /* ── Landscape-only lock (Black & White style from Birthday_final.html) ── */
+        #orient-msg {
+            display: none;
+            position: fixed; inset: 0; z-index: 9999;
+            background: #000000; color: #ffffff;
+            flex-direction: column; align-items: center; justify-content: center;
+            font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', sans-serif;
+            font-size: 0.9rem;
+            letter-spacing: 0.15em; text-align: center; gap: 24px;
+            padding: 24px;
+        }
+        #orient-msg svg { 
+            width: 50px; height: 50px; 
+            animation: rotatePhone 2s ease-in-out infinite;
+        }
+        @keyframes rotatePhone {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-90deg); }
+        }
+        @media (orientation: portrait) {
+            #orient-msg { display: flex; }
+            #enter-overlay, #canvas-container, #text-overlay, #webcam-container, #black-shutter { display: none !important; }
+        }
+        
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+            background: transparent;
+        }
+        #canvas-container canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ── Text overlay — above Three.js canvas, below enter screen ── */
+        #text-overlay {
+            position: fixed; inset: 0; z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: none;
+        }
+        .t-digit {
+            position: absolute;
+            font-family: 'SF Pro Display','SF Pro Text','Inter','Helvetica Neue','Arial Black',Arial,sans-serif;
+            font-weight: 900; font-style: normal;
+            line-height: 1; letter-spacing: -0.02em;
+            color: #fff;
+            opacity: 0; transform: scale(0.94);
+            transition: opacity 0.32s ease, transform 0.32s ease;
+            white-space: nowrap;
+            will-change: opacity, transform;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+        .t-digit.show { opacity: 1; transform: scale(1); }
+
+        #t1 { font-size: clamp(160px,28vw,320px); }
+        #t2 { font-size: clamp(160px,28vw,320px); }
+        #t3 { font-size: clamp(160px,28vw,320px); }
+        #t4 { font-size: clamp(160px,28vw,320px); }
+
+        /* I ❤ YOU row */
+        #t5 {
+            display: flex; align-items: center;
+            gap: clamp(16px,2.4vw,36px);
+        }
+        #t5 span {
+            font-family: 'SF Pro Display','SF Pro Text','Inter','Helvetica Neue','Arial Black',Arial,sans-serif;
+            font-weight: 900; font-style: normal;
+            line-height: 1; letter-spacing: -0.01em;
+            font-size: clamp(80px,12vw,160px);
+            color: #fff;
+        }
+        #t5 .heart-svg {
+            width: clamp(80px,12vw,160px);
+            height: clamp(80px,12vw,160px);
+            flex-shrink: 0;
+        }
+
+        /* ANVI label below I ❤ YOU */
+        #t5-wrap {
+            position: absolute;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: clamp(10px, 2vh, 24px);
+            width: 90%; max-width: 100%;
+            padding: 0; white-space: normal;
+        }
+        #t-anvi {
+            font-family: 'SF Pro Display','SF Pro Text','Inter','Helvetica Neue','Arial Black',Arial,sans-serif;
+            font-weight: 900; font-style: normal;
+            line-height: 1; letter-spacing: -0.01em;
+            font-size: clamp(80px,12vw,160px);
+            color: #ffffff;
+            white-space: nowrap;
+        }
+
+        /* ── Solid Premium Moss Green Radial Gradient Overlay ── */
+        #enter-overlay {
+            position: fixed; 
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(ellipse at 50% 50%, #120020 0%, #06000f 45%, #020008 75%, #000000 100%);
+            z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column;
+            font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', sans-serif;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        /* Black Shutter for seamless Black Fade-In transition */
+        #black-shutter {
+            position: fixed;
+            inset: 0;
+            background: transparent;
+            z-index: 150;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+        }
+
+        /* Floating background Red Hearts */
+        .floating-bg-heart {
+            position: absolute;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 1;
+            top: 105%; /* Start below screen bounds */
+            animation: floatUpwards linear infinite;
+            filter: drop-shadow(0 2px 4px rgba(255, 0, 60, 0.25));
+            will-change: transform, opacity;
+        }
+        @keyframes floatUpwards {
+            0% { transform: translateY(0) translateX(0) scale(0.7); opacity: 0; }
+            10% { opacity: 0.8; }
+            90% { opacity: 0.8; }
+            100% { transform: translateY(-125vh) translateX(var(--drift)) scale(1.1); opacity: 0; }
+        }
+
+        /* Glass Panel Container (Slightly Smaller Glass & Shifted Upwards with Outer Blur Removed) */
+        .enter-box { 
+            position: relative; 
+            z-index: 2; 
+            text-align: center; 
+            display: flex; 
+            flex-direction: column;
+            align-items: center; 
+            justify-content: center; 
+            width: 85%;
+            max-width: 290px;
+            padding: 30px 20px;
+            background: rgba(255, 255, 255, 0.22);
+            border: 1px solid transparent;
+            border-radius: 20px;
+            backdrop-filter: blur(35px) saturate(130%);
+            -webkit-backdrop-filter: blur(35px) saturate(130%);
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.4);
+            margin: 16px;
+            transform: translateY(-35px) scale(0.95);
+            transform-origin: center center;
+        }
+
+        /* Golden outline border animation */
+        .enter-box::after {
+            content: ''; position: absolute; inset: 0; border-radius: 20px; padding: 1.5px;
+            background: linear-gradient(135deg, rgba(255,215,0,0.10) 0%, rgba(255,215,0,0.10) 40%, rgba(255,215,0,0.95) 50%, rgba(255,215,0,0.10) 60%, rgba(255,215,0,0.10) 100%);
+            background-size: 250% 250%;
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            animation: borderGoldShine 6s ease-in-out infinite; pointer-events: none; z-index: 10;
+        }
+        @keyframes borderGoldShine {
+            0%   { background-position: 200% 200%; }
+            50%  { background-position: -50% -50%; }
+            100% { background-position: 200% 200%; }
+        }
+
+        .intro-title {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            margin-bottom: 12px;
+            line-height: 1.45;
+            text-align: center;
+        }
+        .intro-title .title-line1 {
+            display: block;
+            background: linear-gradient(135deg, #FFDF00 0%, #C0C0C0 25%, #FFFFFF 50%, #FFD700 75%, #E5E4E2 100%);
+            background-size: 200% 200%;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: textGoldShine 6s ease-in-out infinite;
+        }
+        .intro-title .title-line2 {
+            display: block;
+            background: linear-gradient(135deg, #FFDF00 0%, #C0C0C0 25%, #FFFFFF 50%, #FFD700 75%, #E5E4E2 100%);
+            background-size: 200% 200%;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: textGoldShine 6s ease-in-out infinite;
+        }
+
+        .intro-subtitle {
+            margin-top: 6px;
+            color: rgba(255, 255, 255, 0.80);
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 24px;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            max-width: 250px;
+        }
+
+        /* Transparent Glass ENTER Button */
+        @keyframes textGoldShine {
+    0%   { background-position: 200% 200%; }
+    50%  { background-position: -50% -50%; }
+    100% { background-position: 200% 200%; }
+}
+#btn-enter {
+            background: rgba(255, 255, 255, 0.08); /* Completely transparent glass */
+            border: 1px solid rgba(255, 255, 255, 0.45); /* Elegant glass outline */
+            color: #ffffff; 
+            padding: 12px 35px; 
+            font-size: 12px; 
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            cursor: pointer; 
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+            text-transform: uppercase;
+            border-radius: 40px; 
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2); /* Soft inner refraction shelf */
+            outline: none;
+        }
+        #btn-enter:hover { 
+            transform: scale(1.03);
+            background: rgba(255, 255, 255, 0.18);
+            border-color: rgba(255, 255, 255, 0.7);
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3);
+        }
+        #btn-enter:active {
+            transform: scale(0.98);
+        }
+
+        #webcam-container { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; }
+        #webcam { width: 1px; height: 1px; }
+    </style>
+</head>
+<body>
+    <!-- Rotate device message (Black & White Minimal design) -->
+    <div id="orient-msg">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="3"/>
+            <path d="M12 18h.01"/>
+        </svg>
+        <span style="font-weight: 600; color: #ffffff">ROTATE DEVICE</span>
+        <span style="font-size: 0.65rem; color: rgba(255,255,255,0.4); letter-spacing: 0.2em">HORIZONTAL MODE REQUIRED</span>
+    </div>
+
+    <!-- Solid Baby Pink Glass Prism Overlay -->
+    <div id="enter-overlay">
+        <div class="enter-box">
+            <h1 class="intro-title">
+                    <span class="title-line1">I Want To Say Something</span>
+                    <span class="title-line2">Anvi Baccha</span>
+                </h1>
+            <p class="intro-subtitle">
+                <span style="color: #ffffff; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 600; font-size: 16px; display: block; margin-bottom: 2px;">Show Your Hand</span><span style="background: linear-gradient(135deg, #FFDF00 0%, #C0C0C0 25%, #FFFFFF 50%, #FFD700 75%, #E5E4E2 100%); background-size: 200% 200%; background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: textGoldShine 6s ease-in-out infinite; display: inline-block;">And Count 1 To 5</span>
+            </p>
+            <button id="btn-enter">ENTER</button>
+        </div>
+    </div>
+
+    <!-- Black Shutter for seamless Black Fade-In transition -->
+    <div id="black-shutter"></div>
+
+    <div id="webcam-container"><video id="webcam" autoplay playsinline muted></video></div>
+    <div id="canvas-container"></div>
+
+    <!-- Solid font text overlay — above Three.js, below enter screen -->
+    <div id="text-overlay">
+        <div id="t1" class="t-digit">1</div>
+        <div id="t2" class="t-digit">2</div>
+        <div id="t3" class="t-digit">3</div>
+        <div id="t4" class="t-digit">4</div>
+        <div id="t5-wrap" class="t-digit">
+            <div id="t5">
+                <span>I</span>
+                <svg class="heart-svg" viewBox="0 0 100 88" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ffffff"/>
+                            <stop offset="48%" stop-color="#ff4488"/>
+                            <stop offset="100%" stop-color="#ff0044"/>
+                        </linearGradient>
+                    </defs>
+                    <path fill="url(#hg)" d="M50 84 C22 66,2 52,2 30 C2 14,14 2,28 2 C37 2,45 7,50 15 C55 7,63 2,72 2 C86 2,98 14,98 30 C98 52,78 66,50 84 Z"/>
+                </svg>
+                <span>YOU</span>
+            </div>
+            <div id="t-anvi">ANVI</div>
+        </div>
+    </div>
+
+<script>
+// ─── Cute Floating Red Hearts (Equal grid-based distribution) ─────────────────
+(function buildFloatingHearts(){
+    const overlay = document.getElementById('enter-overlay');
+    const columns = 6; // Perfect division from left to right
+    const heartsPerColumn = 5; // 30 hearts total
+    
+    for(let col = 0; col < columns; col++) {
+        for(let h = 0; h < heartsPerColumn; h++) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+            svg.setAttribute('class', 'floating-bg-heart');
+            svg.setAttribute('viewBox', '0 0 100 88');
+            
+            // Deterministic distribution boundaries
+            const minX = (col / columns) * 100;
+            const maxX = ((col + 1) / columns) * 100;
+            const x = minX + Math.random() * (maxX - minX); 
+            
+            const size = 12 + Math.random() * 16; 
+            const dur = 9 + Math.random() * 7; 
+            const delay = -Math.random() * dur; 
+            
+            svg.style.left = x + '%';
+            svg.style.width = size + 'px';
+            svg.style.height = (size * 0.88) + 'px';
+            svg.style.animationDuration = dur + 's';
+            svg.style.animationDelay = delay + 's';
+            
+            // Alternating drift directions for perfect dynamic balance
+            const driftDirection = (col % 2 === 0) ? 1 : -1;
+            const driftAmount = (Math.random() * 25) * driftDirection;
+            svg.style.setProperty('--drift', driftAmount + 'px');
+            
+            const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+            path.setAttribute('d', 'M50 84 C22 66,2 52,2 30 C2 14,14 2,28 2 C37 2,45 7,50 15 C55 7,63 2,72 2 C86 2,98 14,98 30 C98 52,78 66,50 84 Z');
+            
+            // Solid clean Red
+            path.setAttribute('fill', '#ff003c');
+            
+            svg.appendChild(path);
+            overlay.appendChild(svg);
+        }
+    }
+})();
+
+// ─── Globals ──────────────────────────────────────────────────────────────────
+let scene, camera, renderer, clock;
+let particleCount = 5000; // Clean count, well-spaced flowers
+let particles = [];
+let particleGeometry, particleSystem;
+let currentState = 0;
+let pendingState = -1;
+let transitionProgress = 1.0;
+
+// Butterflies
+let butterflies = [];
+const MAX_BUTTERFLIES = 18;
+let butterflySpawnTimer = 0;
+
+let handsDetector, cameraUtils, webcamActive = false;
+let fv_seenStates = new Set();   // track which states user has shown
+let fv_state5Unlocked = false;   // true only after 1→2→3→4 all seen
+let gestureHistory = [];
+let lastFrameTime = 0;
+let isTransitioning = false;
+let transitionTimer = 0;
+let circleAngle = 0;
+
+const enterOverlay = document.getElementById('enter-overlay');
+const btnEnter = document.getElementById('btn-enter');
+const webcamElement = document.getElementById('webcam');
+
+initThree();
+
+// Only start animating if landscape on load
+if (window.innerWidth > window.innerHeight) {
+    animate();
+} else {
+    // Portrait on load — show rotate screen, don't animate
+    document.getElementById('orient-msg').style.display = 'flex';
+    clock.stop();
+    // Pause hearts via inline style (JS controls, no CSS override)
+    document.querySelectorAll('.floating-bg-heart').forEach(h => {
+        h.style.animationPlayState = 'paused';
+        h.style.animationDelay = '0s';
+    });
+}
+
+// Start camera sensor instantly on page load
+startSensor();
+
+// ─── ORIENTATION LOCK — pause everything in portrait ──────────────────────────
+let _isPortrait = window.innerHeight > window.innerWidth;
+let _wasPausedByOrient = false;
+let _animStarted = window.innerWidth > window.innerHeight; // true only if landscape on load
+let _firstLandscape = true; // first time going landscape — fresh heart start
+
+function checkOrientation() {
+    const portrait = window.innerHeight > window.innerWidth;
+    const orientMsg = document.getElementById('orient-msg');
+
+    if (portrait && !_isPortrait) {
+        // Just went portrait — pause
+        _isPortrait = true;
+        orientMsg.style.display = 'flex';
+        // Pause hearts exactly where they are
+        document.querySelectorAll('.floating-bg-heart').forEach(h => {
+            h.style.animationPlayState = 'paused';
+        });
+        // Pause Three.js clock
+        if (clock) clock.stop();
+        // Pause background music
+        if (_bgAudioEl && !_bgAudioEl.paused) {
+            _bgAudioEl.pause();
+            _wasPausedByOrient = true;
+        }
+        // Pause webcam hand detection
+        webcamActive = false;
+
+    } else if (!portrait && _isPortrait) {
+        // Just went landscape — resume
+        _isPortrait = false;
+        orientMsg.style.display = 'none';
+        if (_firstLandscape) {
+            // First time — fresh start from bottom, no delay
+            _firstLandscape = false;
+            document.querySelectorAll('.floating-bg-heart').forEach(h => {
+                h.style.animationDelay = '0s';
+                h.style.animationPlayState = 'paused';
+                void h.offsetWidth; // force reflow
+                h.style.animationPlayState = 'running';
+            });
+        } else {
+            // Second time+ — just unpause from where they stopped
+            document.querySelectorAll('.floating-bg-heart').forEach(h => {
+                h.style.animationPlayState = 'running';
+            });
+        }
+        // Resume/start Three.js clock and animate loop
+        if (clock) clock.start();
+        if (!_animStarted) { _animStarted = true; animate(); }
+        // Resume background music if it was playing
+        if (_wasPausedByOrient && _bgAudioEl && _bgAudioEl.src) {
+            _bgAudioEl.play().catch(() => {});
+            _wasPausedByOrient = false;
+        }
+        // Resume webcam
+        webcamActive = true;
+    }
+}
+
+window.addEventListener('resize', checkOrientation);
+window.addEventListener('orientationchange', () => setTimeout(checkOrientation, 100));
+
+// ─── PREMIUM WEB AUDIO ENGINE ─────────────────────────────────────────────────
+let _audioCtx = null;
+function getAudioCtx() {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return _audioCtx;
+}
+
+// ─── BACKGROUND MUSIC ENGINE ─────────────────────────────────────────────────
+const _bgAudioEl = new Audio('song.mp3');
+_bgAudioEl.loop = true;
+_bgAudioEl.volume = 0.72;
+_bgAudioEl.preload = 'auto';
+
+function startBgMusic() {
+    _bgAudioEl.currentTime = 0;
+    const p = _bgAudioEl.play();
+    if (p) p.catch(() => {});
+}
+
+function playEnterSound() {
+    const ctx = getAudioCtx();
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0, ctx.currentTime);
+    master.gain.linearRampToValueAtTime(0.38, ctx.currentTime + 0.04);
+    master.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.8);
+    master.connect(ctx.destination);
+
+    // Deep cinematic bass thump
+    const bass = ctx.createOscillator();
+    const bassGain = ctx.createGain();
+    bass.type = 'sine';
+    bass.frequency.setValueAtTime(80, ctx.currentTime);
+    bass.frequency.exponentialRampToValueAtTime(38, ctx.currentTime + 0.55);
+    bassGain.gain.setValueAtTime(1.0, ctx.currentTime);
+    bassGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+    bass.connect(bassGain); bassGain.connect(master);
+    bass.start(ctx.currentTime); bass.stop(ctx.currentTime + 0.55);
+
+    // Shimmer high layer — rising crystalline sweep
+    [1047, 1319, 1568, 2093, 2637].forEach((freq, idx) => {
+        const t = ctx.currentTime + idx * 0.07;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = freq;
+        filter.Q.value = 12;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
+        osc.frequency.linearRampToValueAtTime(freq * 1.5, t + 0.9);
+        g.gain.setValueAtTime(0.55, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+        osc.connect(filter); filter.connect(g); g.connect(master);
+        osc.start(t); osc.stop(t + 1.4);
+    });
+
+    // Magical sparkle noise burst
+    const bufLen = ctx.sampleRate * 0.5;
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/bufLen, 3);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'highpass';
+    noiseFilter.frequency.value = 4000;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.28, ctx.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(master);
+    noise.start(ctx.currentTime);
+
+    // Long airy tail pad
+    const pad = ctx.createOscillator();
+    const padGain = ctx.createGain();
+    const padFilter = ctx.createBiquadFilter();
+    padFilter.type = 'lowpass';
+    padFilter.frequency.value = 900;
+    pad.type = 'triangle';
+    pad.frequency.value = 523;
+    padGain.gain.setValueAtTime(0, ctx.currentTime + 0.1);
+    padGain.gain.linearRampToValueAtTime(0.45, ctx.currentTime + 0.5);
+    padGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.8);
+    pad.connect(padFilter); padFilter.connect(padGain); padGain.connect(master);
+    pad.start(ctx.currentTime + 0.1); pad.stop(ctx.currentTime + 2.8);
+}
+
+function playTransitionSound(state) {
+    const ctx = getAudioCtx();
+    const now = ctx.currentTime;
+
+    // ── Shared reverb-like convolver simulation via feedback delay ──
+    function makeReverb(dryGain) {
+        const delay = ctx.createDelay(0.08);
+        delay.delayTime.value = 0.055;
+        const fbGain = ctx.createGain();
+        fbGain.gain.value = 0.28;
+        delay.connect(fbGain);
+        fbGain.connect(delay);
+        dryGain.connect(delay);
+        delay.connect(ctx.destination);
+    }
+
+    // ── Helper: layered harmonic bell tone ──
+    function bell(freq, vol, dur, startT) {
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(vol, startT);
+        g.gain.exponentialRampToValueAtTime(0.0001, startT + dur);
+        g.connect(ctx.destination);
+        makeReverb(g);
+        [1, 2.756, 5.4, 8.93].forEach((ratio, i) => {
+            const o = ctx.createOscillator();
+            const og = ctx.createGain();
+            og.gain.value = 1 / (i + 1);
+            o.type = 'sine';
+            o.frequency.value = freq * ratio;
+            o.connect(og); og.connect(g);
+            o.start(startT); o.stop(startT + dur);
+        });
+    }
+
+    // ── Helper: sparkle dust (short pitched noise bursts) ──
+    function sparkle(freq, vol, startT) {
+        const bufLen = Math.floor(ctx.sampleRate * 0.18);
+        const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/bufLen, 2.5);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = 18;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(vol, startT);
+        g.gain.exponentialRampToValueAtTime(0.0001, startT + 0.18);
+        src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+        src.start(startT);
+    }
+
+    // ── Helper: whoosh sweep ──
+    function whoosh(freqStart, freqEnd, vol, dur, startT) {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 600;
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(freqStart, startT);
+        o.frequency.exponentialRampToValueAtTime(freqEnd, startT + dur);
+        g.gain.setValueAtTime(vol, startT);
+        g.gain.exponentialRampToValueAtTime(0.0001, startT + dur);
+        o.connect(lp); lp.connect(g); g.connect(ctx.destination);
+        o.start(startT); o.stop(startT + dur);
+    }
+
+    if (state === 0) {
+        // ── Back to sphere: deep cosmic dissolve ──
+        whoosh(220, 60, 0.18, 0.7, now);
+        bell(130, 0.22, 2.2, now + 0.05);
+        bell(195, 0.14, 1.8, now + 0.12);
+        sparkle(1800, 0.18, now);
+        sparkle(2400, 0.13, now + 0.08);
+
+    } else if (state === 1) {
+        // ── ONE: single pure crystalline ping ──
+        bell(523, 0.28, 2.0, now);
+        sparkle(4200, 0.22, now);
+        sparkle(3100, 0.14, now + 0.06);
+        whoosh(180, 90, 0.10, 0.35, now);
+
+    } else if (state === 2) {
+        // ── TWO: double chime, ascending ──
+        bell(659, 0.24, 1.6, now);
+        bell(784, 0.20, 1.4, now + 0.12);
+        sparkle(5200, 0.18, now + 0.05);
+        sparkle(4400, 0.15, now + 0.18);
+        whoosh(200, 110, 0.10, 0.4, now);
+
+    } else if (state === 3) {
+        // ── THREE: triple fairy arpeggio ──
+        bell(523, 0.22, 1.4, now);
+        bell(659, 0.22, 1.3, now + 0.09);
+        bell(784, 0.22, 1.2, now + 0.18);
+        sparkle(6000, 0.20, now + 0.05);
+        sparkle(5200, 0.16, now + 0.14);
+        sparkle(4400, 0.13, now + 0.22);
+        whoosh(240, 130, 0.12, 0.45, now);
+
+    } else if (state === 4) {
+        // ── FOUR: cosmic chord + shimmer cascade ──
+        bell(523, 0.20, 1.5, now);
+        bell(659, 0.18, 1.4, now + 0.07);
+        bell(784, 0.18, 1.3, now + 0.14);
+        bell(1047, 0.16, 1.2, now + 0.21);
+        [5800, 4900, 4100, 3400].forEach((f, i) => sparkle(f, 0.18, now + i * 0.07));
+        whoosh(280, 150, 0.13, 0.5, now);
+
+    } else if (state === 5) {
+        // ── FIVE "I Love You": magical climax — rising glissando + stardust rain ──
+        [523, 659, 784, 988, 1175].forEach((f, i) => bell(f, 0.22, 1.8 - i*0.15, now + i*0.08));
+        [6500, 5800, 5100, 4400, 3700].forEach((f, i) => sparkle(f, 0.20, now + i * 0.06));
+        // Extra magic shimmer tail
+        [6800, 7200, 7800].forEach((f, i) => sparkle(f, 0.14, now + 0.4 + i * 0.07));
+        whoosh(320, 180, 0.16, 0.6, now);
+        // Dreamy pad swell
+        const pad = ctx.createOscillator();
+        const padG = ctx.createGain();
+        const padF = ctx.createBiquadFilter();
+        padF.type = 'lowpass'; padF.frequency.value = 800;
+        pad.type = 'triangle'; pad.frequency.value = 392;
+        padG.gain.setValueAtTime(0, now + 0.2);
+        padG.gain.linearRampToValueAtTime(0.18, now + 0.6);
+        padG.gain.exponentialRampToValueAtTime(0.0001, now + 2.4);
+        pad.connect(padF); padF.connect(padG); padG.connect(ctx.destination);
+        pad.start(now + 0.2); pad.stop(now + 2.4);
+    }
+}
+
+// Black Fade-In/Out Transition on click
+btnEnter.addEventListener('click', () => {
+    playEnterSound();
+    startBgMusic();
+    if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+    else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen();
+    
+    const shutter = document.getElementById('black-shutter');
+    // 1. Fade the black shutter in to completely cover the screen
+    shutter.style.opacity = '1';
+    
+    setTimeout(() => {
+        // 2. Hide the intro overlay behind the black shutter curtain
+        enterOverlay.style.display = 'none';
+        
+        // 3. Smoothly fade the black shutter out to let the ThreeJS canvas fade in cleanly
+        setTimeout(() => {
+            shutter.style.opacity = '0';
+        }, 100);
+    }, 600); // Wait for shutter animation duration (0.6s)
+});
+
+// ─── THREE.JS INIT ────────────────────────────────────────────────────────────
+function initThree() {
+    const container = document.getElementById('canvas-container');
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.z = 7.5;
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 3));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+    clock = new THREE.Clock();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    const particleTexture = createParticleTexture();
+    particleGeometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(particleCount * 3);
+    const colors = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+        particles.push({
+            pos: new THREE.Vector3((Math.random()-0.5)*16,(Math.random()-0.5)*11,(Math.random()-0.5)*3),
+            vel: new THREE.Vector3(0,0,0),
+            target: new THREE.Vector3(0,0,0),
+            color: new THREE.Color(1,1,1),
+            targetColor: new THREE.Color(1,1,1),
+            nextColor: new THREE.Color(1,1,1),
+            originalTarget: new THREE.Vector3(0,0,0),
+            phase: Math.random()*Math.PI*2
+        });
+        positions[i*3]=particles[i].pos.x; positions[i*3+1]=particles[i].pos.y; positions[i*3+2]=particles[i].pos.z;
+        colors[i*3]=1; colors[i*3+1]=1; colors[i*3+2]=1;
+    }
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions,3));
+    particleGeometry.setAttribute('color',    new THREE.BufferAttribute(colors,3));
+    const particleMat = new THREE.PointsMaterial({
+        size: 0.32, map: particleTexture, transparent: true,
+        blending: THREE.NormalBlending, depthWrite: false, vertexColors: true,
+        sizeAttenuation: true, alphaTest: 0.005
+    });
+    particleSystem = new THREE.Points(particleGeometry, particleMat);
+    scene.add(particleSystem);
+}
+
+function createParticleTexture() {
+    const SIZE = 256;
+    const c = document.createElement('canvas');
+    c.width = SIZE; c.height = SIZE;
+    const ctx = c.getContext('2d');
+    const cx = SIZE / 2, cy = SIZE / 2;
+    ctx.clearRect(0, 0, SIZE, SIZE);
+
+    // Solid inner core - 100% crisp solid white
+    ctx.beginPath();
+    ctx.arc(cx, cy, 26, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    // Very subtle, extremely premium outline glow
+    ctx.beginPath();
+    ctx.arc(cx, cy, 32, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // A microscopic outer halo - barely visible
+    const g = ctx.createRadialGradient(cx, cy, 26, cx, cy, 40);
+    g.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+    g.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+    ctx.fill();
+
+    return new THREE.CanvasTexture(c);
+}
+
+// ─── SHAPE DEFINITIONS ────────────────────────────────────────────────────────
+function getShapePoints(state, count) {
+    const pts = [];
+
+    if (state === 0) {
+        const placed = [];
+        for (let i = 0; i < count; i++) {
+            const ratio = i / count;
+            const u34 = ratio;
+            const v34 = Math.random();
+            const theta34 = u34 * 2.0 * Math.PI;
+            const phi34 = Math.acos(2.0 * v34 - 1.0);
+            const r34 = 2.8;
+            const nx = r34 * Math.sin(phi34) * Math.cos(theta34);
+            const ny = r34 * Math.sin(phi34) * Math.sin(theta34);
+            const nz = r34 * Math.cos(phi34);
+            placed.push({ x: nx, y: ny, z: nz, r: 0.95, g: 0.95, b: 0.98 });
+        }
+        return placed;
+    }
+
+    if (state >= 1 && state <= 5) {
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 14 + Math.random() * 8; 
+            pts.push({
+                x: Math.cos(angle) * dist,
+                y: Math.sin(angle) * dist,
+                z: -5.0,
+                r: 0, g: 0, b: 0
+            });
+        }
+        return pts;
+    }
+
+    return pts;
+}
+
+// ─── HTML TEXT OVERLAY MANAGEMENT ────────────────────────────────────────────
+let _activeTextEl = null;
+let _hideTimer = null;
+
+function showTextState(s) {
+    if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
+
+    const nextEl = (s >= 1 && s <= 5) ? textEls[s] : null;
+
+    if (nextEl === _activeTextEl && nextEl !== null) return;
+
+    if (_activeTextEl) {
+        _activeTextEl.classList.remove('show');
+    }
+
+    if (nextEl) {
+        _hideTimer = setTimeout(() => {
+            for (const el of Object.values(textEls)) {
+                if (el !== nextEl) el.classList.remove('show');
+            }
+            nextEl.style.color = '#fff';
+            nextEl.style.textShadow = 'none';
+            nextEl.classList.add('show');
+            _activeTextEl = nextEl;
+            _hideTimer = null;
+        }, 80);
+    } else {
+        _activeTextEl = null;
+    }
+}
+
+const textEls = {
+    1: document.getElementById('t1'),
+    2: document.getElementById('t2'),
+    3: document.getElementById('t3'),
+    4: document.getElementById('t4'),
+    5: document.getElementById('t5-wrap'),
+};
+
+setTargetsForState(0, true);
+
+// ─── STATE TRANSITION — Sand/granular burst ───────────────────────────────────
+const TRANSITION_BURST_DURATION = 0.16;
+
+function setTargetsForState(newState, instant) {
+    if (newState === currentState && !instant) return;
+
+    const nextPts = getShapePoints(newState, particleCount);
+
+    const cosA = Math.cos(circleAngle);
+    const sinA = Math.sin(circleAngle);
+
+    for (let i = 0; i < particleCount; i++) {
+        const p = particles[i];
+        const pt = nextPts[i];
+
+        if (newState === 0) {
+            p.originalTarget.set(pt.x, pt.y, pt.z);
+            const rx = pt.x * cosA - pt.y * sinA;
+            const ry = pt.x * sinA + pt.y * cosA;
+            p.target.set(rx, ry, pt.z);
+        } else {
+            p.target.set(pt.x, pt.y, pt.z);
+        }
+
+        p.targetColor.setRGB(pt.r, pt.g, pt.b);
+
+        if (instant) {
+            p.pos.set(pt.x + (Math.random()-0.5)*8, pt.y + (Math.random()-0.5)*6, pt.z);
+            p.color.setRGB(pt.r, pt.g, pt.b);
+            p.targetColor.setRGB(pt.r, pt.g, pt.b);
+        }
+    }
+
+    currentState = newState;
+    showTextState(newState);
+    if (!instant) playTransitionSound(newState);
+}
+
+// ─── REALISTIC NEON BUTTERFLIES ───────────────────────────────────────────────
+function createButterflyCanvas(col) {
+    const W = 120, H = 96;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+
+    const cx = W/2, cy = H/2 + 4;
+
+    ctx.save();
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = col;
+
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = col;
+
+    // Left upper wing
+    ctx.beginPath();
+    ctx.moveTo(cx, cy-4);
+    ctx.bezierCurveTo(cx-8, cy-28,  cx-44, cy-30, cx-52, cy-10);
+    ctx.bezierCurveTo(cx-52, cy+8,  cx-28, cy+14, cx, cy+2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Right upper wing
+    ctx.beginPath();
+    ctx.moveTo(cx, cy-4);
+    ctx.bezierCurveTo(cx+8, cy-28,  cx+44, cy-30, cx+52, cy-10);
+    ctx.bezierCurveTo(cx+52, cy+8,  cx+28, cy+14, cx, cy+2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Lower wings
+    ctx.globalAlpha = 0.72;
+    // Left lower
+    ctx.beginPath();
+    ctx.moveTo(cx, cy+2);
+    ctx.bezierCurveTo(cx-6, cy+8,  cx-30, cy+22, cx-28, cy+36);
+    ctx.bezierCurveTo(cx-20, cy+42, cx-8, cy+30, cx, cy+14);
+    ctx.closePath();
+    ctx.fill();
+
+    // Right lower
+    ctx.beginPath();
+    ctx.moveTo(cx, cy+2);
+    ctx.bezierCurveTo(cx+6, cy+8,  cx+30, cy+22, cx+28, cy+36);
+    ctx.bezierCurveTo(cx+20, cy+42, cx+8, cy+30, cx, cy+14);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(cx-18, cy-8, 14, 9, -0.4, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx+18, cy-8, 14, 9,  0.4, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+
+    // Body
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 6; ctx.shadowColor = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy-12); ctx.lineTo(cx, cy+36);
+    ctx.stroke();
+
+    // Antennae
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy-12);
+    ctx.quadraticCurveTo(cx-14, cy-32, cx-20, cy-38);
+    ctx.moveTo(cx, cy-12);
+    ctx.quadraticCurveTo(cx+14, cy-32, cx+20, cy-38);
+    ctx.stroke();
+
+    // Antenna tips
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(cx-20, cy-38, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+20, cy-38, 2.5, 0, Math.PI*2); ctx.fill();
+
+    return c;
+}
+
+const BUTTERFLY_COLORS = [
+    '#ff00ff','#00ffff','#aaff00','#ff6600',
+    '#ff44cc','#44ffdd','#ff88ff','#ffdd00',
+    '#00ff88','#ff3388'
+];
+
+const BUTTERFLY_TEXTURES = BUTTERFLY_COLORS.map(col => {
+    const bc = createButterflyCanvas(col);
+    return new THREE.CanvasTexture(bc);
+});
+
+class NeonButterfly {
+    constructor() {
+        const idx = Math.floor(Math.random()*BUTTERFLY_TEXTURES.length);
+        const tex = BUTTERFLY_TEXTURES[idx];
+        const mat = new THREE.SpriteMaterial({
+            map: tex, transparent: true,
+            blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        this.sprite = new THREE.Sprite(mat);
+        this.baseScale = 0.42 + Math.random()*0.38;
+        this.sprite.scale.set(this.baseScale*1.6, this.baseScale, 1);
+
+        this.wingPhase = Math.random()*Math.PI*2;
+        this.wingSpeed = 6 + Math.random()*7;
+
+        const dirs = [
+            [ 0, 1],  // up
+            [ 0,-1],  // down
+            [ 1, 0],  // right
+            [-1, 0],  // left
+            [ 1, 1],  // up-right
+            [-1, 1],  // up-left
+            [ 1,-1],  // down-right
+            [-1,-1],  // down-left
+        ];
+        const dirIdx = butterflies.length % dirs.length;
+        const d = dirs[dirIdx];
+        const spd = 0.042 + Math.random()*0.032;
+        const mag = Math.hypot(d[0], d[1]);
+        this.vx = (d[0]/mag) * spd;
+        this.vy = (d[1]/mag) * spd;
+
+        this.z = -3.0 - Math.random()*0.6;
+
+        this.x = (Math.random()-0.5)*1.2;
+        this.y = (Math.random()-0.5)*1.2;
+        this.sprite.position.set(this.x, this.y, this.z);
+        scene.add(this.sprite);
+    }
+
+    resetPos() {
+        this.x = (Math.random()-0.5)*1.5;
+        this.y = (Math.random()-0.5)*1.5;
+        this.sprite.position.set(this.x, this.y, this.z);
+    }
+
+    update(time) {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        const drift = Math.sin(time*1.6 + this.wingPhase)*0.008;
+        this.x += -this.vy * drift;
+        this.y +=  this.vx * drift;
+
+        this.sprite.position.set(this.x, this.y, this.z);
+
+        const flap = 0.55 + 0.45*Math.abs(Math.sin(time*this.wingSpeed + this.wingPhase));
+        this.sprite.scale.x = this.baseScale * 1.6 * flap;
+
+        this.sprite.material.rotation = Math.atan2(this.vy, this.vx) - Math.PI/2;
+
+        if (Math.abs(this.x) > 11.5 || Math.abs(this.y) > 8.5) this.resetPos();
+    }
+}
+
+function updateButterflies(time) {
+    if (currentState === 5) {
+        if (butterflies.length < MAX_BUTTERFLIES) {
+            butterflySpawnTimer -= 0.016;
+            if (butterflySpawnTimer <= 0) {
+                butterflies.push(new NeonButterfly());
+                butterflySpawnTimer = 0.10;
+            }
+        }
+        for (const b of butterflies) b.update(time);
+    } else {
+        if (butterflies.length > 0) {
+            for (const b of butterflies) scene.remove(b.sprite);
+            butterflies.length = 0;
+            butterflySpawnTimer = 0;
+        }
+    }
+}
+
+// ─── MAIN ANIMATION LOOP ──────────────────────────────────────────────────────
+function animate() {
+    requestAnimationFrame(animate);
+    if (window.innerHeight > window.innerWidth) return; // portrait — skip frame
+    const time = clock.getElapsedTime();
+    const dt = Math.min(time - lastFrameTime, 0.05);
+    lastFrameTime = time;
+    const posArr = particleGeometry.attributes.position.array;
+    const colArr = particleGeometry.attributes.color.array;
+
+    if (isTransitioning) {
+        transitionTimer -= dt;
+        if (transitionTimer <= 0) isTransitioning = false;
+    }
+
+    const ROT_SPEED = 0.006; 
+    if (currentState === 0) circleAngle += ROT_SPEED;
+    const cosA = Math.cos(circleAngle);
+    const sinA = Math.sin(circleAngle);
+
+    const lerpT = 0.065;
+
+    for (let i = 0; i < particleCount; i++) {
+        const p = particles[i];
+
+        let tx, ty, tz;
+        if (currentState === 0) {
+            tx = p.originalTarget.x * cosA - p.originalTarget.y * sinA;
+            ty = p.originalTarget.x * sinA + p.originalTarget.y * cosA;
+            tz = p.originalTarget.z;
+            const drift = 0.06;
+            tx += Math.sin(time * 0.8 + p.phase * 2.1) * drift;
+            ty += Math.cos(time * 0.7 + p.phase * 1.7) * drift;
+        } else {
+            tx = p.target.x; ty = p.target.y; tz = p.target.z;
+        }
+
+        p.pos.x += (tx - p.pos.x) * lerpT;
+        p.pos.y += (ty - p.pos.y) * lerpT;
+        p.pos.z += (tz - p.pos.z) * lerpT;
+
+        posArr[i*3]   = p.pos.x;
+        posArr[i*3+1] = p.pos.y;
+        posArr[i*3+2] = p.pos.z;
+
+        p.color.lerp(p.targetColor, 0.16);
+        colArr[i*3]   = p.color.r;
+        colArr[i*3+1] = p.color.g;
+        colArr[i*3+2] = p.color.b;
+    }
+
+    particleGeometry.attributes.position.needsUpdate = true;
+    particleGeometry.attributes.color.needsUpdate = true;
+
+    updateButterflies(time);
+    renderer.render(scene, camera);
+}
+
+// ─── MEDIAPIPE HANDS — Birthday.html detection system ─────────────────────────
+let fv_smoothedHand = null;
+const FV_SMOOTHING = 0.3;
+
+function startSensor() {
+    if (window.sensorStarted) return;
+    window.sensorStarted = true;
+
+    handsDetector = new Hands({
+        locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+    });
+    handsDetector.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    handsDetector.onResults(onHandResults);
+
+    cameraUtils = new Camera(webcamElement, {
+        onFrame: async () => {
+            if (webcamActive) await handsDetector.send({image: webcamElement});
+        },
+        width: 640, height: 480
+    });
+    cameraUtils.start().then(() => webcamActive = true).catch(e => console.warn('Camera error:', e));
+}
+
+const SMOOTHING_FRAMES = 7;
+const CONFIRM_THRESHOLD = 5;
+
+function onHandResults(results) {
+    let detected = 0;
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const raw = results.multiHandLandmarks[0];
+        if (!fv_smoothedHand) {
+            fv_smoothedHand = raw.map(lm => ({ x: lm.x, y: lm.y }));
+        } else {
+            for (let i = 0; i < 21; i++) {
+                fv_smoothedHand[i].x += (raw[i].x - fv_smoothedHand[i].x) * FV_SMOOTHING;
+                fv_smoothedHand[i].y += (raw[i].y - fv_smoothedHand[i].y) * FV_SMOOTHING;
+            }
+        }
+        detected = countFingers(fv_smoothedHand);
+    } else {
+        fv_smoothedHand = null;
+    }
+
+    gestureHistory.push(detected);
+    if (gestureHistory.length > SMOOTHING_FRAMES) gestureHistory.shift();
+    let stable = majorityVote();
+
+    // Track seen states (1–4) to unlock state 5
+    if (stable >= 1 && stable <= 4) fv_seenStates.add(stable);
+    if (!fv_state5Unlocked && fv_seenStates.has(1) && fv_seenStates.has(2) && fv_seenStates.has(3) && fv_seenStates.has(4)) {
+        fv_state5Unlocked = true;
+    }
+
+    // Block state 5 until unlocked
+    if (stable === 5 && !fv_state5Unlocked) stable = currentState;
+
+    if (stable !== currentState) setTargetsForState(stable, false);
+}
+
+function countFingers(lm) {
+    const d = (p1, p2) => Math.hypot(lm[p1].x - lm[p2].x, lm[p1].y - lm[p2].y);
+
+    const thumb  = d(4, 17) > d(3, 17) * 1.05;
+    const index  = d(8, 0)  > d(6, 0)  * 1.05;
+    const middle = d(12, 0) > d(10, 0) * 1.05;
+    const ring   = d(16, 0) > d(14, 0) * 1.05;
+    const pinky  = d(20, 0) > d(18, 0) * 1.05;
+
+    const count = [index, middle, ring, pinky].filter(Boolean).length;
+
+    const middleFolded = d(12, 0) < d(10, 0) * 1.25;  
+    const ringFolded   = d(16, 0) < d(14, 0) * 1.25;
+    const isILY = thumb && index && middleFolded && ringFolded && pinky;
+
+    const isOpen = thumb && count === 4;
+
+    if (isILY || isOpen) return 5;
+
+    if (count >= 1 && count <= 4) return count;
+    return 0;
+}
+
+function majorityVote() {
+    const freq = {};
+    let maxC = 0, best = currentState;
+    for (const v of gestureHistory) {
+        freq[v] = (freq[v]||0) + 1;
+        if (freq[v] > maxC) { maxC = freq[v]; best = v; }
+    }
+    return (freq[best]||0) >= CONFIRM_THRESHOLD ? best : currentState;
+}
+
+window.addEventListener('keydown', e => {
+    if (e.key >= '0' && e.key <= '5') setTargetsForState(parseInt(e.key), false);
+});
+</script>
+</body>
+</html>
